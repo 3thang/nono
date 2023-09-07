@@ -1,0 +1,86 @@
+package com.example.maze;
+
+import androidx.appcompat.app.AppCompatActivity;
+
+import android.app.Dialog;
+import android.content.ContentValues;
+import android.content.Context;
+import android.content.Intent;
+import android.database.sqlite.SQLiteDatabase;
+import android.graphics.drawable.ColorDrawable;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.ImageButton;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.TimeZone;
+
+public class Game extends AppCompatActivity {
+
+    GameView gameView;
+
+    static int cols;
+    static int rows;
+    static int speed;
+    static int watch;
+
+    static User user;
+
+    static Context context;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(Constants.GAME_ACTIVITY_LAYOUT);
+
+        context = this;
+
+        gameView = findViewById(Constants.GAME_VIEW_ID);
+
+        Intent taker = getIntent();
+        getDataFromIntent(taker);
+
+        gameView.setCOLS(cols);
+        gameView.setROWS(rows);
+        gameView.setPLAYER_STEPS(speed);
+        gameView.setPLAYER_WATCH(watch);
+
+    }
+
+    public void getDataFromIntent(Intent taker) {
+        cols = taker.getIntExtra("cols", 0);
+        rows = taker.getIntExtra("rows", 0);
+        speed = taker.getIntExtra("speed", 0);
+        watch = taker.getIntExtra("watch", 0);
+
+        user = (User) taker.getSerializableExtra("user");
+    }
+
+    public static void writeResultsDB(int id, int rows, int cols, int speed, int watch, String time){
+        DBHelper dbHelper = new DBHelper(context);
+        SQLiteDatabase database;
+
+        database = dbHelper.getWritableDatabase();
+
+        TimeZone tz = TimeZone.getDefault();
+        Calendar calendar = Calendar.getInstance(tz);
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+        String date = sdf.format(calendar.getTime());
+
+        ContentValues cv = new ContentValues();
+        cv.put(DBHelper.OWNER_ID, id);
+        cv.put(DBHelper.DATE, date);
+        cv.put(DBHelper.MAZE_ROWS, rows);
+        cv.put(DBHelper.MAZE_COLUMNS, cols);
+        cv.put(DBHelper.PLAYER_SPEED, speed);
+        cv.put(DBHelper.PLAYER_WATCH, watch);
+        cv.put(DBHelper.TIME_PASS, time);
+        database.insert(DBHelper.STATISTIC_TABLE, null, cv);
+
+        database.close();
+    }
+
+}
