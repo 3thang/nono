@@ -1,0 +1,128 @@
+package com.example.maze;
+
+import static com.example.maze.Game.context; import static com.example.maze.Game.writeResultsDB;
+
+import android.app.Dialog;
+import android.content.Context;
+import android.content.Intent; import android.graphics.drawable.ColorDrawable; import android.view.View; import android.widget.ImageButton; import android.widget.TextView; import android.widget.Toast;
+
+public class DialogManager {
+
+    private static Dialog winDialog;
+    private static Dialog loseDialog;
+
+    public static void init(Context context) {
+        winDialog = new Dialog(context);
+        loseDialog = new Dialog(context);
+    }
+
+    public static void openWinDialog(int milliseconds) {
+        winDialog.setContentView(Constants.WIN_DIALOG_LAYOUT);
+        winDialog.getWindow().setBackgroundDrawable(new ColorDrawable(0));
+        winDialog.setCanceledOnTouchOutside(false);
+
+        String time = formatTime(milliseconds);
+
+        TextView tv_stopwatch = winDialog.findViewById(Constants.TV_STOPWATCH_ID);
+        tv_stopwatch.setText(time);
+
+        ImageButton bt_play = winDialog.findViewById(Constants.BT_PLAY_ID);
+        setButtonClickListener(bt_play, MainActivity.class);
+
+        ImageButton bt_again = winDialog.findViewById(Constants.BT_AGAIN_ID);
+        setButtonClickListener(bt_again, Game.class);
+
+        ImageButton bt_upload = winDialog.findViewById(Constants.BT_UPLOAD_ID);
+        if(Game.user.getId() == -1){
+            bt_upload.setVisibility(View.INVISIBLE);
+        }
+        String finalTime = time;
+        bt_upload.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                writeResultsDB(Game.user.getId(), Game.rows, Game.cols, Game.speed, Game.watch, finalTime);
+                Toast.makeText(context, "Achievement saved", Toast.LENGTH_LONG).show();
+                bt_upload.setVisibility(View.INVISIBLE);
+            }
+        });
+
+        winDialog.show();
+    }
+
+    public static void loseDialog(int milliseconds) {
+        loseDialog.setContentView(Constants.LOSE_DIALOG_LAYOUT);
+        loseDialog.getWindow().setBackgroundDrawable(new ColorDrawable(0));
+        loseDialog.setCanceledOnTouchOutside(false);
+
+        String time = formatTime(milliseconds);
+
+        TextView tv_stopwatch = loseDialog.findViewById(Constants.TV_STOPWATCH_ID);
+        tv_stopwatch.setText(time);
+
+        ImageButton bt_play = loseDialog.findViewById(Constants.BT_PLAY_ID);
+        setButtonClickListener(bt_play, MainActivity.class);
+
+        ImageButton bt_again = loseDialog.findViewById(Constants.BT_AGAIN_ID);
+        setButtonClickListener(bt_again, Game.class);
+
+        loseDialog.show();
+    }
+
+    public static String formatTime(int milliseconds) {
+        String time = "";
+        int minutes = (milliseconds / 1000) / 60;
+        int seconds = (milliseconds / 1000) - (minutes * 60);
+        int hours = minutes / 60;
+        milliseconds = (milliseconds - ((hours * 60 * 60 * 1000) + (minutes * 60 * 1000) + (seconds * 1000))) / 10;
+
+        if(hours < 10){
+            time += "0";
+        }
+        time += hours + ":";
+
+        if(minutes < 10){
+            time += "0";
+        }
+        time += minutes + ":";
+
+        if(seconds < 10){
+            time += "0";
+        }
+        time += seconds + ":";
+
+        if(milliseconds < 10){
+            time += "0";
+        }
+        time += milliseconds;
+
+        return time;
+    }
+
+    public static void setButtonClickListener(ImageButton button, Class<?> activityClass) {
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent send = new Intent(context, activityClass);
+                send.putExtra("user", Game.user);
+                send.putExtra("cols", Game.cols);
+                send.putExtra("rows", Game.rows);
+                send.putExtra("speed", Game.speed);
+                send.putExtra("watch", Game.watch);
+
+                context.startActivity(send);
+            }
+        });
+    }
+
+    public void loseDialog() {
+        // Gọi phương thức static của lớp DialogManager
+        int milliseconds = 0;
+        DialogManager.loseDialog(milliseconds);
+    }
+
+    public void openWinDialog() {
+        // Gọi phương thức static của lớp DialogManager
+        int milliseconds = 0;
+        DialogManager.openWinDialog(milliseconds);
+    }
+}
