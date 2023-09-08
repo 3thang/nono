@@ -1,82 +1,108 @@
 package com.example.maze;
 
-import android.app.Activity;
+import static com.example.maze.Game.context;
+
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
-import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.Locale;
 import java.util.Random;
 import java.util.Stack;
 
-
 public class GameView extends View {
 
-    // Use constants instead of hard-coded values
-    private static final int COLS = 60;
-    private static final int ROWS = 60;
-    private static final float WALL_THICKNESS = 10;
-    private static final float EXIT_MARGIN = 0;
-    private static final float PLAYER_SIZE = 0;
-    private static final float PLAYER_STEPS = 0;
-    private static final int PLAYER_WATCH = 0;
-    private static final int MAX_TIME = 60000; // số milliseconds tối đa cho người chơi
+    // Constants for the game settings
+    public static int NUM_COLS = 60; // Number of columns in the maze
+    public static int NUM_ROWS = 60; // Number of rows in the maze
+    public static final float WALL_WIDTH = 10; // Width of the wall
+    public static float EXIT_MARGIN = 0; // Margin of the exit cell
+    public static float PLAYER_SIZE = 0; // Size of the player dot
+    public static float PLAYER_STEPS = 0; // Steps of the player movement
+    public static int PLAYER_WATCH = 0; // Time for the player to watch
+    public static final int MAX_TIME = 60000; // Maximum time for the player in milliseconds
+    // Constants for the directions
+    public static final int TOP = 0;
+    public static final int RIGHT = 1;
+    public static final int BOTTOM = 2;
+    public static final int LEFT = 3;
+    // Constants for the game graphics
+    public static final int MARGIN_BOTTOM = 350; // Bottom margin of the maze
+    public static final int MARGIN_TOP = 150; // Top margin of the maze
 
-    private Cell[][] cells;
-    private float cellSize, hMargin, vMargin, speed;
-    boolean start = true, startStopwatch = false;
+    // Variables for the game logic
+    private Cell[][] cells; // Array of cells in the maze
+    private Cell playerCell = new Cell(0,0 ,0); // Current cell of the player
+    private Cell farthestCell = new Cell(0,0 ,0); // Farthest cell from the start (the exit cell)
+    private int countSteps = 0; // Number of steps taken by the player
+    private int maxSteps = 0; // Maximum number of steps allowed for the player
+    private boolean start = true; // Flag to indicate the start of the game
+    private boolean startStopwatch = false; // Flag to indicate the start of the stopwatch
+    private boolean goal; // Flag to indicate if the player has reached the goal
+    private boolean dialogCalled; // Flag to indicate if the dialog has been called
 
+    // Variables for the game graphics
+    private float cellSize; // Size of each cell
+    private float hMargin; // Horizontal margin of the maze
+    private float vMargin; // Vertical margin of the maze
+    private float speed; // Speed of the player movement
+    private float playerPosX; // X coordinate of the player dot
+    private float playerPosY; // Y coordinate of the player dot
+    private float x1 = 0, y1 = 0; // Coordinates of the touch position in pixels
+    
+
+    // Paint objects for drawing different elements
+    private Paint wallPaint; // Paint for the wall
+    private Paint playerPaint; // Paint for the player dot
+    private Paint visitCell; // Paint for the visited cell
+    private Paint exit; // Paint for the exit cell
+
+    // Random object for generating the maze
     private Random random;
+
+    // Handler object for updating the game
     private Handler handler = new Handler();
-    private int seconds;
-    private Paint wallPaint, playerPaint, visitCell, exit;
 
-    float x1 = 0;
-    float y1 = 0;
+    private int milliseconds;
+    int seconds = (MAX_TIME - milliseconds) / 1000; // Calculate the remaining seconds
 
-    float playerPosX;
-    float playerPosY;
-
-    int countSteps = 0;
-    int maxSteps = 0;
-    Cell farestCell = new Cell(0,0 ,0);
-    Cell playerCell = new Cell( 0, 0, 0);
-
-    int width;
-    int height;
-
+    // Context object for accessing resources
     Context finalContext;
 
+    // Calendar object for measuring time
     Calendar start_time;
+    private int width;
+    private int height;
 
-
+    // Constructor of the GameView class
     public GameView(Context context, @Nullable AttributeSet attrs){
         super(context, attrs);
 
         finalContext = context;
 
+        // Initialize the paint objects with colors and widths
         wallPaint = new Paint();
         wallPaint.setColor(ContextCompat.getColor(context, Constants.WALL_COLOR));
-        wallPaint.setStrokeWidth(WALL_THICKNESS);
+        wallPaint.setStrokeWidth(WALL_WIDTH);
 
         playerPaint = new Paint();
         playerPaint.setColor(ContextCompat.getColor(context, Constants.RED_COLOR));
-        playerPaint.setStrokeWidth(WALL_THICKNESS);
+        playerPaint.setStrokeWidth(WALL_WIDTH);
 
         visitCell = new Paint();
         visitCell.setColor(ContextCompat.getColor(context, Constants.GREEN_COLOR));
-        visitCell.setStrokeWidth(WALL_THICKNESS);
+        visitCell.setStrokeWidth(WALL_WIDTH);
 
         exit = new Paint();
         exit.setColor(Color.BLUE);
@@ -85,403 +111,557 @@ public class GameView extends View {
 
         random = new Random();
 
-        // Use a separate method to initialize the cells array
-        initCells(0);
-
-        createMaze();
+        createMaze(); // Create the maze
     }
 
-    // Add a method to initialize the cells array
-    private void initCells(int i) {
-        cells = new Cell[COLS][ROWS];
+    private class Cell{
+        boolean
+                topWall = true, leftWall = true, bottomWall = true, rightWall = true, visited = false, visible = false;
+        int col, row, stepsTo;
 
-        for (int x=0; x<COLS; x++)
+        public Cell(int col, int row, int stepsTo)
         {
-            for (int y=0; y<ROWS; y++)
+            this.col = col;
+            this.row = row;
+            this.stepsTo = stepsTo;
+        }
+    }
+
+    // Method to create the maze using backtracking algorithm
+    private void createMaze() {
+        Stack<Cell> stack = new Stack<>(); // Stack to store the visited cells
+        Cell current, next; // Variables to store the current and next cells
+
+        cells = new Cell[NUM_COLS][NUM_ROWS]; // Initialize the array of cells
+
+        // Loop through the array and create new cells
+        for (int x=0; x<NUM_COLS; x++)
+        {
+            for (int y=0; y<NUM_ROWS; y++)
             {
                 cells[x][y] = new Cell(x, y ,0);
             }
         }
-    }
 
-    // Add a method to check if two cells are neighbours
-    private boolean isNeighbour(Cell cell1, Cell cell2) {
-        return Math.abs(cell1.col - cell2.col) + Math.abs(cell1.row - cell2.row) == 1;
-    }
-
-    // Add a method to remove the wall between two neighbour cells
-    private void removeWall(Cell cell1, Cell cell2) {
-        if (isNeighbour(cell1, cell2)) {
-            if (cell1.col == cell2.col) {
-                if (cell1.row > cell2.row) {
-                    cell1.topWall = false;
-                    cell2.bottomWall = false;
-                } else {
-                    cell1.bottomWall = false;
-                    cell2.topWall = false;
-                }
-            } else {
-                if (cell1.col > cell2.col) {
-                    cell1.leftWall = false;
-                    cell2.rightWall = false;
-                } else {
-                    cell1.rightWall = false;
-                    cell2.leftWall = false;
-                }
-            }
-        }
-    }
-
-    // Add comments to explain the purpose and operation of the methods and variables
-    // Create a maze using a depth-first search algorithm
-    private void createMaze() {
-        Stack<Cell> stack = new Stack<>();
-        Cell current, next;
-
-        current = cells[0][0];
-        current.visited = true;
+        current = cells[0][0]; // Start from the top-left cell
+        current.visited = true; // Mark the current cell as visited
 
         do {
-            next = getNeighbour(current);
-            if (next != null) {
-                removeWall(current, next);
-                stack.push(current);
-                current = next;
-                current.visited = true;
-                countSteps++;
-                current.stepsTo = countSteps;
-            } else {
-                current = stack.pop();
-                countSteps--;
+            next = getNeighbour(current); // Get a random unvisited neighbour of the current cell
+            if (next != null) { // If there is a neighbour
+                removeWall(current, next); // Remove the wall between the current and next cells
+                stack.push(current); // Push the current cell to the stack
+                current = next; // Make the next cell the current cell
+                current.visited = true; // Mark the current cell as visited
+                countSteps++; // Increase the number of steps
+                current.stepsTo = countSteps; // Set the steps to reach the current cell
+            } else { // If there is no neighbour
+                current = stack.pop(); // Pop a cell from the stack and make it the current cell
+                countSteps--; // Decrease the number of steps
             }
-        }while (!stack.empty());
+        }while (!stack.empty()); // Repeat until the stack is empty
 
     }
 
-    // Get a random unvisited neighbour of a cell
+    // Method to get a random unvisited neighbour of a cell
     private Cell getNeighbour(Cell cell){
-        ArrayList<Cell> neighbours = new ArrayList<>();
+        ArrayList<Cell> neighbours = new ArrayList<>(); // List to store the neighbours
 
-        // Check if the cell has a left neighbour
-        if(cell.col > 0)
+        // left neighbour
+        if(cell.col > 0) // If the cell is not on the left edge
         {
-            // Check if the left neighbour is unvisited
-            if(!cells[cell.col-1][cell.row].visited){
-                neighbours.add(cells[cell.col-1][cell.row]);
+            if(!cells[cell.col-1][cell.row].visited){ // If the left neighbour is not visited
+                neighbours.add(cells[cell.col-1][cell.row]); // Add the left neighbour to the list
             }
         }
 
-        // Check if the cell has a top neighbour
-        if(cell.row > 0)
+        // top neighbour
+        if(cell.row > 0) // If the cell is not on the top edge
         {
-            // Check if the top neighbour is unvisited
-            if(!cells[cell.col][cell.row-1].visited){
-                neighbours.add(cells[cell.col][cell.row-1]);
+            if(!cells[cell.col][cell.row-1].visited){ // If the top neighbour is not visited
+                neighbours.add(cells[cell.col][cell.row-1]); // Add the top neighbour to the list
             }
         }
 
-        // Check if the cell has a right neighbour
-        if(cell.col < COLS-1)
+        // right neighbour
+        if(cell.col < NUM_COLS-1) // If the cell is not on the right edge
         {
-            // Check if the right neighbour is unvisited
-            if(!cells[cell.col+1][cell.row].visited){
-                neighbours.add(cells[cell.col+1][cell.row]);
+            if(!cells[cell.col+1][cell.row].visited){ // If the right neighbour is not visited
+                neighbours.add(cells[cell.col+1][cell.row]); // Add the right neighbour to the list
             }
         }
 
-        // Check if the cell has a bottom neighbour
-        if(cell.row < ROWS-1)
+        // bottom neighbour
+        if(cell.row < NUM_ROWS-1) // If the cell is not on the bottom edge
         {
-            // Check if the bottom neighbour is unvisited
-            if(!cells[cell.col][cell.row+1].visited){
-                neighbours.add(cells[cell.col][cell.row+1]);
+            if(!cells[cell.col][cell.row+1].visited){ // If the bottom neighbour is not visited
+                neighbours.add(cells[cell.col][cell.row+1]); // Add the bottom neighbour to the list
             }
         }
 
-        // Return a random neighbour from the list, or null if the list is empty
-        if(neighbours.size() > 0){
-            int index = random.nextInt(neighbours.size());
-            return neighbours.get(index);
-        }
-
-        return null;
-    }
-    // Remove the wall between two neighbouring cells
-    private void removeWall(Cell current, Cell next){
-        // Check if the cells are in the same column
-        if(current.col == next.col){
-            // Check if the current cell is above the next cell
-            if(current.row < next.row){
-                // Remove the bottom wall of the current cell and the top wall of the next cell
-                current.bottomWall = false;
-                next.topWall = false;
-            } else {
-                // Remove the top wall of the current cell and the bottom wall of the next cell
-                current.topWall = false;
-                next.bottomWall = false;
-            }
-        }
-        // Check if the cells are in the same row
-        else if(current.row == next.row){
-            // Check if the current cell is left of the next cell
-            if(current.col < next.col){
-                // Remove the right wall of the current cell and the left wall of the next cell
-                current.rightWall = false;
-                next.leftWall = false;
-            } else {
-                // Remove the left wall of the current cell and the right wall of the next cell
-                current.leftWall = false;
-                next.rightWall = false;
-            }
-        }
-    }
-    // Initialize the cells array with new cells
-    private void initCells() {
-        cells = new Cell[COLS][ROWS];
-
-        for (int x=0; x<COLS; x++)
+        if(neighbours.size() > 0) // If there is at least one neighbour
         {
-            for (int y=0; y<ROWS; y++)
-            {
-                cells[x][y] = new Cell(x, y ,0);
-            }
+            int index = random.nextInt(neighbours.size()); // Get a random index from the list
+            return neighbours.get(index); // Return the neighbour at that index
         }
+        return  null; // Otherwise, return null
+
     }
 
-    // Draw the maze on the canvas
+    // Method to remove the wall between two cells
+    private void removeWall(Cell current, Cell next) {
+        // next in top
+        if(current.col == next.col && current.row == next.row+1) // If the next cell is above the current cell
+        {
+            current.topWall = false; // Remove the top wall of the current cell
+            next.bottomWall = false; // Remove the bottom wall of the next cell
+        }
+
+        // next in left
+        if(current.col == next.col+1 && current.row == next.row) // If the next cell is on the left of the current cell
+        {
+            current.leftWall = false; // Remove the left wall of the current cell
+            next.rightWall = false; // Remove the right wall of the next cell
+        }
+
+        // next in right
+        if(current.col == next.col-1 && current.row == next.row) // If the next cell is on the right of the current cell
+        {
+            current.rightWall = false; // Remove the right wall of the current cell
+            next.leftWall = false; // Remove the left wall of the next cell
+        }
+
+        // next in bottom
+        if(current.col == next.col && current.row == next.row-1) // If the next cell is below the current cell
+        {
+            current.bottomWall = false; // Remove the bottom wall of the current cell
+            next.topWall = false; // Remove the top wall of the next cell
+        }
+    }
+    // Method to check if the position of the player dot is valid
+    private boolean checkPlace(float x, float y) {
+        int col = (int) (x / cellSize); // Get the column index of the cell containing the player dot
+        int row = (int) (y / cellSize); // Get the row index of the cell containing the player dot
+
+        try {
+            // Check if the player dot is touching any wall of the cell
+            if (cells[col][row].leftWall && x - PLAYER_SIZE <= col * cellSize) {
+                return false; // Invalid position
+            }
+            if (cells[col][row].topWall && y - PLAYER_SIZE <= row * cellSize) {
+                return false; // Invalid position
+            }
+            if (cells[col][row].rightWall && x + PLAYER_SIZE >= (col + 1) * cellSize) {
+                return false; // Invalid position
+            }
+            if (cells[col][row].bottomWall && y + PLAYER_SIZE >= (row + 1) * cellSize) {
+                return false; // Invalid position
+            }
+        }
+        catch (Exception e){ // Catch any exception
+            return false; // Invalid position
+        }
+
+        return true; // Valid position
+    }
+
+    private void visibleCell(){
+        cells[playerCell.col][playerCell.row].visible = true;
+
+        Cell[][] tempCells = new Cell[NUM_COLS][NUM_ROWS];
+
+        for (int x = 0; x < NUM_COLS; x++) {
+            for (int y = 0; y < NUM_ROWS; y++) {
+                tempCells[x][y] = new Cell(x , y, 0);
+                tempCells[x][y].visible = cells[x][y].visible;
+            }
+        }
+
+        for (int i = 0; i < PLAYER_WATCH; i++) {
+            for (int x = 0; x < NUM_COLS; x++) {
+                for (int y = 0; y < NUM_ROWS; y++) {
+                    if(tempCells[x][y].visible){
+                        checkVisibleNeighbour(cells[x][y]);
+                    }
+                }
+            }
+            for (int x = 0; x < NUM_COLS; x++) {
+                for (int y = 0; y < NUM_ROWS; y++) {
+                    tempCells[x][y].visible = cells[x][y].visible;
+                }
+            }
+
+        }
+    }
+
+    // Method to check and mark the neighbour cells of a given cell, if there is no wall between them
+    private void checkVisibleNeighbour(Cell cell) {
+        try {
+            if(!cell.topWall){ // If there is no top wall
+                cells[cell.col][cell.row - 1].visible = true; // Mark the top neighbour as visible
+            }
+        }
+        catch (Exception e){} // Catch any exception
+
+        try {
+            if(!cell.rightWall){ // If there is no right wall
+                cells[cell.col + 1][cell.row].visible = true; // Mark the right neighbour as visible
+            }
+        }
+        catch (Exception e){} // Catch any exception
+
+        try {
+            if(!cell.bottomWall){ // If there is no bottom wall
+                cells[cell.col][cell.row + 1].visible = true; // Mark the bottom neighbour as visible
+            }
+        }
+        catch (Exception e){} // Catch any exception
+
+        try {
+            if(!cell.leftWall){ // If there is no left wall
+                cells[cell.col - 1][cell.row].visible = true; // Mark the left neighbour as visible
+            }
+        }
+        catch (Exception e){} // Catch any exception
+    }
+
+    // Method to mark the neighbour cells of a given cell as visible if there is no wall between them
+    private void markNeighbour(Cell cell){
+        try {
+            if(!cell.topWall){ // If there is no top wall
+                cells[cell.col][cell.row - 1].visible = true; // Mark the top neighbour as visible
+            }
+        }
+        catch (Exception e){} // Catch any exception
+
+        try {
+            if(!cell.rightWall){ // If there is no right wall
+                cells[cell.col + 1][cell.row].visible = true; // Mark the right neighbour as visible
+            }
+        }
+        catch (Exception e){} // Catch any exception
+
+        try {
+            if(!cell.bottomWall){ // If there is no bottom wall
+                cells[cell.col][cell.row + 1].visible = true; // Mark the bottom neighbour as visible
+            }
+        }
+        catch (Exception e){} // Catch any exception
+
+        try {
+            if(!cell.leftWall){ // If there is no left wall
+                cells[cell.col - 1][cell.row].visible = true; // Mark the left neighbour as visible
+            }
+        }
+        catch (Exception e){} // Catch any exception
+    }
+    // Method to draw the game elements on the canvas
     @Override
     protected void onDraw(Canvas canvas) {
-        canvas.drawColor(ContextCompat.getColor(getContext(), Constants.BACKGROUND_COLOR));
+        width = getWidth();
+        height = getHeight();
+        int seconds = 60000;
 
-        int width = getWidth();
-        int height = getHeight();
+        cellSize = width + height;
+        while(cellSize * NUM_COLS >= width || cellSize * NUM_ROWS >= height - 350)
+        {
+            cellSize--;
+        }
 
-        if (width/height < COLS/ROWS)
-            cellSize = width/(COLS+1);
-        else
-            cellSize = height/(ROWS+1);
+        EXIT_MARGIN = cellSize * 3 / 4;
+        PLAYER_SIZE = cellSize / 4;
+        speed = cellSize * PLAYER_STEPS / 10;
 
-        hMargin = (width-COLS*cellSize)/2;
-        vMargin = (height-ROWS*cellSize)/2;
+        hMargin = (width - NUM_COLS * cellSize) / 2;
+        vMargin = (height - NUM_ROWS * cellSize) / 2;
+
+        //Draw stop watch
+        canvas.translate(0, 150);
+        if(!startStopwatch){
+            drawStopWatch(canvas, 0);
+        }
+        else {
+            drawStopWatch(canvas, (int) (Calendar.getInstance().getTimeInMillis() - start_time.getTimeInMillis()));
+        }
+
+        //Draw back button
+        canvas.translate(0, -120);
+        Drawable d = getResources().getDrawable(R.drawable.back, null);
+        d.setBounds(width * 11 / 12, 0, width, width / 12);
+        d.draw(canvas);
 
         canvas.translate(hMargin, vMargin);
 
-        for(int x=0; x<COLS; x++){
-            for(int y=0; y<ROWS; y++){
-                if(cells[x][y].topWall){
-                    canvas.drawLine(
-                            x * cellSize,
-                            y * cellSize,
-                            (x + 1) * cellSize,
-                            y * cellSize,
-                            wallPaint);
+        if(start) {
+            playerPosX = cellSize / 2;
+            playerPosY = cellSize / 2;
+            start = false;
+        }
+
+        for (int x = 0; x < NUM_COLS; x++) {
+            for (int y = 0; y < NUM_ROWS; y++) {
+                cells[x][y].visible = false;
+            }
+        }
+
+        visibleCell();
+        // Loop through the array of cells and draw the walls of the visible cells
+        for (int x = 0; x < NUM_COLS; x++) {
+            for (int y = 0; y < NUM_ROWS; y++) {
+                if(cells[x][y].visible) { // If the cell is visible
+                    if (cells[x][y].topWall) { // If the cell has a top wall
+                        // Draw a line for the top wall
+                        canvas.drawLine(
+                                x * cellSize,
+                                y * cellSize,
+                                (x + 1) * cellSize,
+                                y * cellSize,
+                                wallPaint);
+                    }
+
+                    if (cells[x][y].leftWall) { // If the cell has a left wall
+                        // Draw a line for the left wall
+                        canvas.drawLine(
+                                x * cellSize,
+                                y * cellSize,
+                                x * cellSize,
+                                (y + 1) * cellSize,
+                                wallPaint);
+                    }
+
+                    if (cells[x][y].bottomWall) { // If the cell has a bottom wall
+                        // Draw a line for the bottom wall
+                        canvas.drawLine(
+                                x * cellSize,
+                                (y + 1) * cellSize,
+                                (x + 1) * cellSize,
+                                (y + 1) * cellSize,
+                                wallPaint);
+                    }
+
+                    if (cells[x][y].rightWall) { // If the cell has a right wall
+                        // Draw a line for the right wall
+                        canvas.drawLine(
+                                (x + 1) * cellSize,
+                                y * cellSize,
+                                (x + 1) * cellSize,
+                                (y + 1) * cellSize,
+                                wallPaint);
+                    }
                 }
 
-                if(cells[x][y].leftWall){
-                    canvas.drawLine(
-                            x * cellSize,
-                            y * cellSize,
-                            x * cellSize,
-                            (y + 1) * cellSize,
-                            wallPaint);
-                }
-
-                if(cells[x][y].bottomWall){
-                    canvas.drawLine(
-                            x * cellSize,
-                            (y + 1) * cellSize,
-                            (x + 1) * cellSize,
-                            (y + 1) * cellSize,
-                            wallPaint);
-                }
-
-                if(cells[x][y].rightWall){
-                    canvas.drawLine(
-                            (x + 1) * cellSize,
-                            y * cellSize,
-                            (x + 1) * cellSize,
-                            (y + 1) * cellSize,
-                            wallPaint);
+                if (cells[x][y].stepsTo > maxSteps) { // If the cell has more steps than the current maximum
+                    maxSteps = cells[x][y].stepsTo; // Update the maximum steps
+                    farthestCell = cells[x][y]; // Set the farthest cell to this cell
                 }
             }
         }
+        // Draw Exit
+        if(farthestCell.visible){ // If the farthest cell is visible
+            // Draw a blue rectangle for the exit cell
+            canvas.drawRect(farthestCell.col * cellSize + EXIT_MARGIN,
+                    farthestCell.row * cellSize + EXIT_MARGIN,
+                    (farthestCell.col + 1) * cellSize - EXIT_MARGIN,
+                    (farthestCell.row + 1) * cellSize - EXIT_MARGIN,
+                    exit);
+        }
+
+// Draw Player
+        drawPlayer(canvas, playerPosX, playerPosY, PLAYER_SIZE); // Draw a red dot for the player
+
+        playerCell.col = (int) (playerPosX / cellSize); // Get the column index of the player cell
+        playerCell.row = (int) (playerPosY / cellSize); // Get the row index of the player cell
+
+
+        if (cells[(int) (playerPosX / cellSize)][(int) (playerPosY / cellSize)] == farthestCell) { // If the player reaches the farthest cell
+            // Create a DialogManager object
+            DialogManager dialogManager = new DialogManager();
+            // Initialize the winDialog and loseDialog objects
+            dialogManager.init(context);
+            // Call the openWinDialog method of the dialogManager object
+            dialogManager.openWinDialog((int) (Calendar.getInstance().getTimeInMillis() - start_time.getTimeInMillis())); // Pass the elapsed time as a parameter
+            handler.removeCallbacks(runnableStopwatch); // Stop the stopwatch
+        }
+        else if(seconds <= 0){ // If the time runs out
+            // Create a DialogManager object
+            DialogManager dialogManager = new DialogManager();
+            // Initialize the winDialog and loseDialog objects
+            dialogManager.init(context);
+            // Call the loseDialog method of the dialogManager object
+            dialogManager.loseDialog((int) (Calendar.getInstance().getTimeInMillis() - start_time.getTimeInMillis())); // Pass the elapsed time as a parameter
+            handler.removeCallbacks(runnableStopwatch); // Stop the stopwatch
+        }
+
+        canvas.translate(hMargin * -1, vMargin * -1); // Move the canvas back to the original position
+        playerCell = cells[(int) (playerPosX / cellSize)][(int) (playerPosY / cellSize)]; // Set the player cell to the cell that contains the player dot
+
     }
-    // Draw the player on the canvas
-    private void drawPlayer(Canvas canvas) {
-        float margin = cellSize / 10;
 
-        playerPaint.setColor(ContextCompat.getColor(getContext(), Constants.RED_COLOR));
 
-        canvas.drawCircle(
-                (playerCell.col + 0.5f) * cellSize,
-                (playerCell.row + 0.5f) * cellSize,
-                cellSize / 2 - margin,
-                playerPaint);
-
-        playerPaint.setColor(ContextCompat.getColor(getContext(), Constants.WHITE_COLOR));
-
-        canvas.drawCircle(
-                (playerCell.col + 0.5f) * cellSize,
-                (playerCell.row + 0.5f) * cellSize,
-                cellSize / 2 - margin - PLAYER_SIZE,
-                playerPaint);
+    // Method to draw the player dot on the canvas
+    public void drawPlayer(Canvas canvas, float x, float y, float width) {
+        canvas.drawCircle(x , // Draw a circle with the given x coordinate
+                y , // Draw a circle with the given y coordinate
+                width, // Draw a circle with the given width
+                playerPaint); // Use the player paint object
     }
 
-    // Draw the exit on the canvas
-    private void drawExit(Canvas canvas) {
-        float margin = cellSize / 10;
+    // Method to draw the stopwatch on the canvas
+    public void drawStopWatch(Canvas canvas, int milliseconds){
+        Paint blackPaint = new Paint(); // Create a paint object for the text
+        blackPaint.setColor(Color.BLACK); // Set the color to black
+        blackPaint.setTextSize(150); // Set the text size to 150
 
-        canvas.drawRect(
-                farestCell.col * cellSize + margin,
-                farestCell.row * cellSize + margin,
-                (farestCell.col + 1) * cellSize - margin,
-                (farestCell.row + 1) * cellSize - margin,
-                exit);
-    }
+        String time = ""; // Create a string variable to store the time
+        int seconds = (MAX_TIME - milliseconds) / 1000; // Calculate the remaining seconds
 
-    // Draw the visible cells on the canvas
-    private void drawVisibleCells(Canvas canvas) {
-        for(int x=0; x<COLS; x++){
-            for(int y=0; y<ROWS; y++){
-                if(cells[x][y].visible){
-                    canvas.drawRect(
-                            x * cellSize,
-                            y * cellSize,
-                            (x + 1) * cellSize,
-                            (y + 1) * cellSize,
-                            visitCell);
-                }
+        if(seconds <= 0){ // If the time runs out
+            // Lose the game
+            time = "You lose!"; // Set the time string to "You lose!"
+            handler.removeCallbacks(runnableMove); // Stop the player movement
+            if(dialogCalled == false){ // If the dialog is not called yet
+                // Call the lose dialog
+                DialogManager dialogManager = new DialogManager(); // Create a dialog manager object
+                dialogManager.init(context); // Initialize the win and lose dialogs
+                dialogManager.loseDialog((int) (Calendar.getInstance().getTimeInMillis() - start_time.getTimeInMillis())); // Call the lose dialog with the elapsed time as a parameter
+                dialogCalled = true; // Set the dialog called flag to true
             }
         }
+        // Other lines of code
+
+        else if(goal == true){ // If the player reaches the goal
+            // Win the game
+            time = "You win!"; // Set the time string to "You win!"
+            handler.removeCallbacks(runnableMove); // Stop the player movement
+            // Call the win dialog
+            DialogManager dialogManager = new DialogManager(); // Create a dialog manager object
+            dialogManager.init(context); // Initialize the win and lose dialogs
+            dialogManager.openWinDialog(); // Call the win dialog
+        }
+        else{
+            // Count down the time
+            time = String.format("%02d", seconds); // Format the time string with two digits
+        }
+
+        canvas.drawText(time, 0, 0, blackPaint); // Draw the time string on the canvas with black paint
     }
-    // Draw the timer on the canvas
-    private void drawTimer(Canvas canvas) {
-        Paint textPaint = new Paint();
-        textPaint.setColor(ContextCompat.getColor(getContext(), Constants.WHITE_COLOR));
-        textPaint.setTextSize(50);
-        textPaint.setTextAlign(Paint.Align.CENTER);
 
-        int minutes = seconds / 60;
-        int secs = seconds % 60;
+    // Runnable object to move the player dot according to the touch position
+    private Runnable runnableMove = new Runnable() {
+        @Override
+        public void run() {
+            float diff = (float) Math.sqrt(Math.pow(x1 - playerPosX, 2) + Math.pow(y1 - playerPosY, 2)); // Calculate the distance between the touch position and the player position
+            float diffX = (x1 - playerPosX) / diff; // Calculate the x component of the unit vector
+            float diffY = (y1 - playerPosY) / diff; // Calculate the y component of the unit vector
 
-        String time = String.format(Locale.getDefault(), "%02d:%02d", minutes, secs);
-
-        canvas.drawText(time, getWidth() / 2, 50, textPaint);
-    }
-
-    // Update the timer every second
-    private void updateTimer() {
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (startStopwatch) {
-                    seconds++;
-                    updateTimer();
-                }
+            if(checkPlace(playerPosX + speed * diffX, playerPosY)){ // If the new x position is valid
+                playerPosX += speed * diffX; // Update the x position of the player dot
             }
-        }, 1000);
-    }
 
-    // Check if the player has reached the exit
-    private void checkExit() {
-        if (playerCell == farestCell) {
-            startStopwatch = false;
-            Toast.makeText(getContext(), "You win!", Toast.LENGTH_SHORT).show();
-            ((Activity) finalContext).finish();
+            if(checkPlace(playerPosX, playerPosY + speed * diffY)){ // If the new y position is valid
+                playerPosY += speed * diffY; // Update the y position of the player dot
+            }
+
+            handler.postDelayed(this, 1); // Repeat this runnable after 1 millisecond
+            invalidate(); // Redraw the canvas
+        }
+    };
+
+    // Method to update the status of the game
+    public void update(){
+        // Other lines of code
+        if(playerCell == farthestCell){ // If the player dot is in the exit cell
+            goal = true; // Set the goal flag to true
         }
     }
-    // Handle the touch events on the screen
+
+    // Runnable object to update the stopwatch
+    private Runnable runnableStopwatch = new Runnable() {
+        @Override
+        public void run() {
+            handler.postDelayed(this, 1000); // Repeat this runnable after 1000 milliseconds
+
+            invalidate(); // Redraw the canvas
+        }
+    };
+    // Method to handle the touch event on the screen
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (event.getAction() == MotionEvent.ACTION_DOWN) {
-            return true;
+        x1 = event.getX(); // Get the x coordinate of the touch position
+        y1 = event.getY(); // Get the y coordinate of the touch position
+
+        int width = 0;
+        if(x1 > width * 11 / 12 && y1 < width / 12){ // If the touch position is on the back button
+            invalidate(); // Redraw the canvas
+            Intent send = new Intent(finalContext, MainActivity.class); // Create an intent to go back to the main activity
+            send.putExtra("user", Game.user); // Pass the user object as an extra
+            finalContext.startActivity(send); // Start the main activity
         }
 
-        if (event.getAction() == MotionEvent.ACTION_MOVE) {
-            float x = event.getX();
-            float y = event.getY();
-
-            float playerCenterX = hMargin + (playerCell.col + 0.5f) * cellSize;
-            float playerCenterY = vMargin + (playerCell.row + 0.5f) * cellSize;
-
-            float dx = x - playerCenterX;
-            float dy = y - playerCenterY;
-
-            float absDx = Math.abs(dx);
-            float absDy = Math.abs(dy);
-
-            if (absDx > cellSize || absDy > cellSize) {
-
-                if (absDx > absDy) {
-                    // Move left or right
-                    if (dx > 0) {
-                        // Move right
-                        movePlayer(Direction.RIGHT);
-                    } else {
-                        // Move left
-                        movePlayer(Direction.LEFT);
-                    }
-                } else {
-                    // Move up or down
-                    if (dy > 0) {
-                        // Move down
-                        movePlayer(Direction.DOWN);
-                    } else {
-                        // Move up
-                        movePlayer(Direction.UP);
-                    }
-                }
-            }
-
-            return true;
+        if(!startStopwatch){ // If the stopwatch is not started
+            startStopwatch = true; // Set the start flag to true
+            runnableStopwatch.run(); // Run the stopwatch runnable
+            start_time = Calendar.getInstance(); // Get the current time as the start time
         }
 
-        return super.onTouchEvent(event);
-    }
+        x1 = x1 - hMargin; // Adjust the x coordinate according to the horizontal margin
+        y1 = y1 - vMargin; // Adjust the y coordinate according to the vertical margin
 
-    // Move the player in a given direction if possible
-    private void movePlayer(Direction direction) {
-        switch (direction) {
-            case UP:
-                if (!playerCell.topWall) {
-                    playerCell = cells[playerCell.col][playerCell.row - 1];
-                }
+        switch (event.getAction()) { // Switch on the type of touch event
+            case MotionEvent.ACTION_DOWN: // If the user touches down on the screen
+                runnableMove.run(); // Run the move runnable
                 break;
-            case DOWN:
-                if (!playerCell.bottomWall) {
-                    playerCell = cells[playerCell.col][playerCell.row + 1];
-                }
+
+            case MotionEvent.ACTION_MOVE: // If the user moves on the screen
+                x1 = event.getX(); // Update the x coordinate of the touch position
+                y1 = event.getY(); // Update the y coordinate of the touch position
+
+                x1 = x1 - hMargin; // Adjust the x coordinate according to the horizontal margin
+                y1 = y1 - vMargin; // Adjust the y coordinate according to the vertical margin
+
                 break;
-            case LEFT:
-                if (!playerCell.leftWall) {
-                    playerCell = cells[playerCell.col - 1][playerCell.row];
-                }
-                break;
-            case RIGHT:
-                if (!playerCell.rightWall) {
-                    playerCell = cells[playerCell.col + 1][playerCell.row];
-                }
+
+            case MotionEvent.ACTION_UP: // If the user lifts up from the screen
+            case MotionEvent.ACTION_CANCEL: // If the touch event is cancelled
+                handler.removeCallbacks(runnableMove); // Stop the move runnable
                 break;
         }
 
-        checkExit();
-        invalidate();
+        invalidate(); // Redraw the canvas
+        return true; // Return true to indicate that the touch event is handled
     }
 
-    public void setCOLS(int cols) {
+    // Method to set the number of columns for the maze
+    public void setCOLS(int col){
+        NUM_COLS = col; // Set the global variable to the given value
+        random = new Random(); // Create a random object for maze generation
+        createMaze(); // Call the method to create a new maze
+        invalidate(); // Redraw the canvas
     }
 
-    public void setROWS(int rows) {
+    // Method to set the number of rows for the maze
+    public void setROWS(int row){
+        NUM_ROWS = row; // Set the global variable to the given value
+        random = new Random(); // Create a random object for maze generation
+        createMaze(); // Call the method to create a new maze
+        invalidate(); // Redraw the canvas
     }
 
-    public void setPLAYER_STEPS(int speed) {
+    // Method to set the number of steps for the player dot
+    public void setPLAYER_STEPS(int steps){
+        PLAYER_STEPS = steps; // Set the global variable to the given value
+        invalidate(); // Redraw the canvas
     }
 
-    public void setPLAYER_WATCH(int watch) {
+    // Method to set the number of cells that the player dot can see
+    public void setPLAYER_WATCH(int watch){
+        PLAYER_WATCH = watch; // Set the global variable to the given value
+        invalidate(); // Redraw the canvas
     }
 
-    // An enum to represent the four possible directions
-    enum Direction {
-        UP, DOWN, LEFT, RIGHT;
+    // Method to stop the stopwatch
+    public void stopStopwatch(){
+        startStopwatch = false; // Set the start flag to false
+        invalidate(); // Redraw the canvas
     }
 }
