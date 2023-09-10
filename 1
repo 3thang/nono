@@ -12,6 +12,7 @@ import android.os.Handler;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
@@ -23,50 +24,54 @@ import java.util.Stack;
 
 public class GameView extends View {
 
+
     // Constants for the game settings
-    public static int NUM_COLS = 60; // Number of columns in the maze
-    public static int NUM_ROWS = 60; // Number of rows in the maze
-    public static final float WALL_WIDTH = 10; // Width of the wall
-    public static float EXIT_MARGIN = 0; // Margin of the exit cell
-    public static float PLAYER_SIZE = 0; // Size of the player dot
-    public static float PLAYER_STEPS = 0; // Steps of the player movement
-    public static int PLAYER_WATCH = 0; // Time for the player to watch
-    public static final int MAX_TIME = 60000; // Maximum time for the player in milliseconds
+    public static int NUM_COLS = 60;
+    public static int NUM_ROWS = 60;
+    public static final float WALL_WIDTH = 10;
+    public static float EXIT_MARGIN = 0;
+    public static float PLAYER_SIZE = 0;
+    public static float PLAYER_STEPS = 0;
+    public static int PLAYER_WATCH = 0;
+    public static final int MAX_TIME = 60000;
     // Constants for the directions
     public static final int TOP = 0;
     public static final int RIGHT = 1;
     public static final int BOTTOM = 2;
     public static final int LEFT = 3;
     // Constants for the game graphics
-    public static final int MARGIN_BOTTOM = 350; // Bottom margin of the maze
-    public static final int MARGIN_TOP = 150; // Top margin of the maze
-
+    public static final int MARGIN_BOTTOM = 350;
+    public static final int MARGIN_TOP = 150;
     // Variables for the game logic
-    private Cell[][] cells; // Array of cells in the maze
-    private Cell playerCell = new Cell(0,0 ,0); // Current cell of the player
-    private Cell farthestCell = new Cell(0,0 ,0); // Farthest cell from the start (the exit cell)
-    private int countSteps = 0; // Number of steps taken by the player
-    private int maxSteps = 0; // Maximum number of steps allowed for the player
-    private boolean start = true; // Flag to indicate the start of the game
-    private boolean startStopwatch = false; // Flag to indicate the start of the stopwatch
-    private boolean goal; // Flag to indicate if the player has reached the goal
-    private boolean dialogCalled; // Flag to indicate if the dialog has been called
+    private Cell[][] cells;
+    private Cell playerCell = new Cell(0,0 ,0);
+    private Cell farthestCell = new Cell(0,0 ,0);
+    private int countSteps = 0;
+    private int maxSteps = 0;
+    private boolean start = true;
+    private boolean startStopwatch = false;
+    private boolean goal;
+    private boolean dialogCalled;
 
     // Variables for the game graphics
-    private float cellSize; // Size of each cell
-    private float hMargin; // Horizontal margin of the maze
-    private float vMargin; // Vertical margin of the maze
-    private float speed; // Speed of the player movement
-    private float playerPosX; // X coordinate of the player dot
-    private float playerPosY; // Y coordinate of the player dot
-    private float x1 = 0, y1 = 0; // Coordinates of the touch position in pixels
-    
+    private float cellSize;
+    private float hMargin;
+    private float vMargin;
+    private float speed;
+    private float playerPosX;
+    private float playerPosY;
+    private float x1 = 0, y1 = 0;
+
+    private int level = 1; // Biến để lưu trữ level hiện tại
+    private static final int ENEMY_COUNT = 1;
+
+
 
     // Paint objects for drawing different elements
-    private Paint wallPaint; // Paint for the wall
-    private Paint playerPaint; // Paint for the player dot
-    private Paint visitCell; // Paint for the visited cell
-    private Paint exit; // Paint for the exit cell
+    private Paint wallPaint;
+    private Paint playerPaint;
+    private Paint visitCell;
+    private Paint exit;
 
     // Random object for generating the maze
     private Random random;
@@ -85,13 +90,12 @@ public class GameView extends View {
     private int width;
     private int height;
 
-    // Constructor of the GameView class
+
     public GameView(Context context, @Nullable AttributeSet attrs){
         super(context, attrs);
 
         finalContext = context;
 
-        // Initialize the paint objects with colors and widths
         wallPaint = new Paint();
         wallPaint.setColor(ContextCompat.getColor(context, Constants.WALL_COLOR));
         wallPaint.setStrokeWidth(WALL_WIDTH);
@@ -111,7 +115,7 @@ public class GameView extends View {
 
         random = new Random();
 
-        createMaze(); // Create the maze
+        createMaze();
     }
 
     private class Cell{
@@ -127,14 +131,13 @@ public class GameView extends View {
         }
     }
 
-    // Method to create the maze using backtracking algorithm
     private void createMaze() {
-        Stack<Cell> stack = new Stack<>(); // Stack to store the visited cells
-        Cell current, next; // Variables to store the current and next cells
+        Stack<Cell> stack = new Stack<>();
+        Cell current, next;
 
-        cells = new Cell[NUM_COLS][NUM_ROWS]; // Initialize the array of cells
+        cells = new Cell[NUM_COLS][NUM_ROWS];
 
-        // Loop through the array and create new cells
+
         for (int x=0; x<NUM_COLS; x++)
         {
             for (int y=0; y<NUM_ROWS; y++)
@@ -143,27 +146,26 @@ public class GameView extends View {
             }
         }
 
-        current = cells[0][0]; // Start from the top-left cell
-        current.visited = true; // Mark the current cell as visited
+        current = cells[0][0];
+        current.visited = true;
 
         do {
-            next = getNeighbour(current); // Get a random unvisited neighbour of the current cell
-            if (next != null) { // If there is a neighbour
-                removeWall(current, next); // Remove the wall between the current and next cells
-                stack.push(current); // Push the current cell to the stack
-                current = next; // Make the next cell the current cell
-                current.visited = true; // Mark the current cell as visited
-                countSteps++; // Increase the number of steps
-                current.stepsTo = countSteps; // Set the steps to reach the current cell
-            } else { // If there is no neighbour
-                current = stack.pop(); // Pop a cell from the stack and make it the current cell
-                countSteps--; // Decrease the number of steps
+            next = getNeighbour(current);
+            if (next != null) {
+                removeWall(current, next);
+                stack.push(current);
+                current = next;
+                current.visited = true;
+                countSteps++;
+                current.stepsTo = countSteps;
+            } else {
+                current = stack.pop();
+                countSteps--;
             }
-        }while (!stack.empty()); // Repeat until the stack is empty
+        }while (!stack.empty());
 
     }
 
-    // Method to get a random unvisited neighbour of a cell
     private Cell getNeighbour(Cell cell){
         ArrayList<Cell> neighbours = new ArrayList<>(); // List to store the neighbours
 
@@ -277,20 +279,33 @@ public class GameView extends View {
             }
         }
 
-        for (int i = 0; i < PLAYER_WATCH; i++) {
+        // Thêm điều kiện if để kiểm tra watch
+        if (PLAYER_WATCH == 0) {
+            // Nếu watch là 0 thì đánh dấu tất cả các ô là hiển thị
             for (int x = 0; x < NUM_COLS; x++) {
                 for (int y = 0; y < NUM_ROWS; y++) {
-                    if(tempCells[x][y].visible){
-                        checkVisibleNeighbour(cells[x][y]);
+                    cells[x][y].visible = true;
+                }
+            }
+        }
+
+        else {
+            // Nếu không thì dùng vòng lặp for như hiện tại
+            for (int i = 0; i < PLAYER_WATCH; i++) {
+                for (int x = 0; x < NUM_COLS; x++) {
+                    for (int y = 0; y < NUM_ROWS; y++) {
+                        if(tempCells[x][y].visible){
+                            checkVisibleNeighbour(cells[x][y]);
+                        }
                     }
                 }
-            }
-            for (int x = 0; x < NUM_COLS; x++) {
-                for (int y = 0; y < NUM_ROWS; y++) {
-                    tempCells[x][y].visible = cells[x][y].visible;
+                for (int x = 0; x < NUM_COLS; x++) {
+                    for (int y = 0; y < NUM_ROWS; y++) {
+                        tempCells[x][y].visible = cells[x][y].visible;
+                    }
                 }
-            }
 
+            }
         }
     }
 
@@ -508,18 +523,18 @@ public class GameView extends View {
 
     // Method to draw the stopwatch on the canvas
     public void drawStopWatch(Canvas canvas, int milliseconds){
-        Paint blackPaint = new Paint(); // Create a paint object for the text
-        blackPaint.setColor(Color.BLACK); // Set the color to black
-        blackPaint.setTextSize(150); // Set the text size to 150
+        Paint blackPaint = new Paint();
+        blackPaint.setColor(Color.BLACK);
+        blackPaint.setTextSize(150);
 
-        String time = ""; // Create a string variable to store the time
-        int seconds = (MAX_TIME - milliseconds) / 1000; // Calculate the remaining seconds
+        String time = "";
+        int seconds = (MAX_TIME - milliseconds) / 1000;
 
         if(seconds <= 0){ // If the time runs out
             // Lose the game
-            time = "You lose!"; // Set the time string to "You lose!"
+            time = "You lose!";
             handler.removeCallbacks(runnableMove); // Stop the player movement
-            if(dialogCalled == false){ // If the dialog is not called yet
+            if(dialogCalled == false){
                 // Call the lose dialog
                 DialogManager dialogManager = new DialogManager(); // Create a dialog manager object
                 dialogManager.init(context); // Initialize the win and lose dialogs
@@ -590,7 +605,6 @@ public class GameView extends View {
         x1 = event.getX(); // Get the x coordinate of the touch position
         y1 = event.getY(); // Get the y coordinate of the touch position
 
-        int width = 0;
         if(x1 > width * 11 / 12 && y1 < width / 12){ // If the touch position is on the back button
             invalidate(); // Redraw the canvas
             Intent send = new Intent(finalContext, MainActivity.class); // Create an intent to go back to the main activity
